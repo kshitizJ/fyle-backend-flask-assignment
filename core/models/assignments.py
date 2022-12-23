@@ -4,6 +4,7 @@ from core.apis.decorators import Principal
 from core.libs import helpers, assertions
 from core.models.teachers import Teacher
 from core.models.students import Student
+from marshmallow.exceptions import ValidationError
 from sqlalchemy.types import Enum as BaseEnum
 
 
@@ -75,7 +76,8 @@ class Assignment(db.Model):
                                 'This assignment belongs to some other student')
         assertions.assert_valid(assignment.content is not None,
                                 'assignment with empty content cannot be submitted')
-
+        assertions.assert_valid(
+            assignment.state == AssignmentStateEnum.DRAFT, 'only a draft assignment can be submitted')
         assignment.teacher_id = teacher_id
         assignment.state = AssignmentStateEnum.SUBMITTED
         db.session.flush()
@@ -92,14 +94,18 @@ class Assignment(db.Model):
 
     @classmethod
     def grade_assignment(cls, _id, grade, principal: Principal):
+
         if grade == 'A':
             grade = GradeEnum.A
         elif grade == 'B':
             grade = GradeEnum.B
         elif grade == 'C':
             grade = GradeEnum.C
-        else:
+        elif grade == 'D':
             grade = GradeEnum.D
+        else:
+            raise ValidationError("only A, B, C or D can be a grade")
+
         assignment = Assignment.get_by_id(_id)
         assertions.assert_found(
             assignment, 'No assignment with this id was found')
@@ -107,6 +113,8 @@ class Assignment(db.Model):
                                 'This assignment is already graded')
         assertions.assert_valid(assignment.content is not None,
                                 'assignment with empty content cannot be submitted')
+        assertions.assert_valid(assignment.teacher_id == principal.teacher_id,
+                                'assignment was submitted to different teacher')
         assignment.grade = grade
         assignment.state = AssignmentStateEnum.GRADED
         db.session.flush()
